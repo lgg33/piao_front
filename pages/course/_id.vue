@@ -88,7 +88,7 @@
                   <div class="course-txt-body-wrap">
                     <section class="course-txt-body">
                       <!-- 将内容中的html翻译过来 -->
-                      <p v-html="course.description">{{ course.description }}</p>
+                      <div v-html="course.description"/>
                     </section>
                   </div>
                 </div>
@@ -108,10 +108,9 @@
                             </a>
                             <ol class="lh-menu-ol" style="display: block;">
                               <li v-for="video in chapter.children" :key="video.id" class="lh-menu-second ml30">
-                                <a :href="'/player/'+video.videoSourceId"
-                                   :title="video.title"
-                                   target="_blank">
-                                    <span v-if="video.isFree === true" class="fr">
+                                <a style="cursor: pointer" @click="playVideo(video)"
+                                   :title="video.title">
+                                    <span v-if="video.isFree === false" class="fr">
                                         <i class="free-icon vam mr10">免费试听</i>
                                     </span>
                                   <em class="lh-menu-i-2 icon16 mr5">&nbsp;</em>{{ video.title }}
@@ -159,6 +158,28 @@
       </div>
     </section>
     <!-- /课程详情 结束 -->
+    <div>
+      <el-dialog :visible.sync="dialogCourseFormVisible" title="购买课程">
+        <div class="ccInfo">
+          <img :src="course.cover">
+          <div class="main">
+            <h2>{{ course.title }}</h2>
+            <p>{{ course.teacherName }}</p>
+          </div>
+          <div class="course-sp">
+            <span class="course-price-prefix">课程价格: </span>
+            <span class="course-price"> ￥{{ course.price }}</span>
+          </div>
+
+        </div>
+
+        <div class="pay-button">
+          <el-button class="to-pay" :disabled="saveBtnDisabled" type="primary" @click="toPay">去付款</el-button>
+          <el-button  @click="cancel">取消</el-button>
+        </div>
+      </el-dialog>
+    </div>
+
   </div>
 </template>
 
@@ -167,18 +188,97 @@
   import course from "@/api/course";
 
   export default {
-    name: "_id",
+
+    data() {
+      return {
+        dialogCourseFormVisible: false,
+        saveBtnDisabled: false
+      }
+    },
+
     async asyncData({ params, error}) {
       const result = await course.getById(params.id).catch(err => err);
-      console.log(result);
+      // console.log(result.data.data.chapterDtoList[0].children[0].isFree);
+      console.log(result.data.data.token);
       return {
         course: result.data.data.course,
-        chapterList: result.data.data.chapterDtoList
+        chapterList: result.data.data.chapterDtoList,
+        orderToken: result.data.data.token
+      }
+    },
+    methods: {
+      playVideo(video) {
+        if (video.isFree) {
+          return this.toCharge();
+        }
+        let routeUrl = this.$router.resolve("/player/" + video.videoSourceId);
+        window.open(routeUrl.href, '_blank');
+      },
+      toCharge() {
+        this.dialogCourseFormVisible = true;
+      },
+      toPay() {
+        this.saveBtnDisabled = true;
+        this.$router.push({
+          path: '/order',
+          query: {
+            id: this.course.id,
+            token: this.orderToken
+          }
+        });
+        this.saveBtnDisabled = false;
+      },
+      cancel() {
+        this.dialogCourseFormVisible = false;
       }
     }
   }
 </script>
 
 <style scoped>
+
+  .ccInfo img {
+    background: #d6d6d6;
+    width: 100px;
+    height: 56px;
+    display: block;
+    float: left;
+    border: none;
+  }
+  .ccInfo .main {
+    margin-left: 120px;
+  }
+
+  .ccInfo .main p {
+    color: gray;
+  }
+
+
+  .ccInfo .main h2 {
+    font-size: 18px;
+  }
+
+  .course-sp {
+    margin-top: 50px;
+  }
+
+  .course-price {
+    font-size: 25px;
+    color: #d32f24;
+    font-weight: normal;
+  }
+
+  .course-price-prefix {
+    font-size: 15px;
+  }
+
+  .pay-button {
+    margin-left: 520px;
+    margin-top: 20px;
+  }
+
+  .to-pay {
+    background-color: dodgerblue;
+  }
 
 </style>

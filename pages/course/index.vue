@@ -1,8 +1,26 @@
 <template>
   <div id="aCoursesList" class="bg-fa of">
+
     <!-- /课程列表 开始 -->
     <section class="container">
-      <header class="comm-title">
+      <div style="font-size: 15px" v-if="this.$route.query.title">
+        <el-tag style="margin-top: 10px;"
+                closable
+                :type="tag.type" @close="closeTag()">
+          {{tag.name}}
+        </el-tag>
+        <span style="margin-left: 20px">
+          共找到
+          <span style="color: red">
+            {{data.total}}
+          </span>门
+          <span style="color: red">
+            &nbsp;"{{title}}"&nbsp;
+          </span> 相关课程
+        </span>
+      </div>
+
+      <header class="comm-title" style="margin-top: 20px">
         <h2 class="fl tac">
           <span class="c-333">全部课程</span>
         </h2>
@@ -16,7 +34,7 @@
             <dd class="c-s-dl-li">
               <ul class="clearfix">
                 <li :class="allSubject">
-                  <a title="全部" style="cursor: pointer">全部</a>
+                  <a title="全部" @click="getAllSubject" style="cursor: pointer">全部</a>
                 </li>
                 <li :class="{current:subjectIndex===index}" v-for="(item, index) in subjects.items" :key="index">
                   <a :title="item.title" style="cursor: pointer" @click="getBySubject(index,item.id)">{{item.title}}</a>
@@ -35,16 +53,23 @@
           </section>
           <section class="fl">
             <ol class="js-tap clearfix">
-              <li :class="attention">
-                <a title="关注度" @click="getByAttention" style="cursor: pointer">关注度</a>
+              <li :class="comprehensive">
+                <a title="综合排序" @click="getByDefault" style="cursor: pointer">综合排序</a>
               </li>
-              <li :class="newest">
-                <a title="最新" @click="getByNewest" style="cursor: pointer">最新</a>
+              <li :class="attention">
+                <a title="关注度" @click="getByAttention" style="cursor: pointer">关注度
+                  <span v-if="searchCourse.viewCountSort === 1">↓</span>
+                  <span v-else-if="searchCourse.viewCountSort === 2">↑</span>
+                </a>
               </li>
               <li :class="price">
                 <a title="价格" @click="getByPrice" style="cursor: pointer">价格&nbsp;
-                  <span>↓</span>
+                  <span v-if="searchCourse.priceSort === 1">↓</span>
+                  <span v-else-if="searchCourse.priceSort === 2">↑</span>
                 </a>
+              </li>
+              <li :class="newest">
+                <a title="最新" @click="getByNewest" style="cursor: pointer">最新</a>
               </li>
             </ol>
           </section>
@@ -67,7 +92,10 @@
                     </div>
                   </section>
                   <h3 class="hLh30 txtOf mt10">
-                    <a :href="'/course/'+item.id" :title="item.title" class="course-title fsize18 c-333">{{ item.title }}</a>
+                    <el-tooltip class="item" placement="bottom" effect="light">
+                      <div slot="content" v-html="item.title"></div>
+                      <a :href="'/course/'+item.id" class="course-title fsize18 c-333" v-html="item.title"/>
+                    </el-tooltip>
                   </h3>
                   <section class="mt10 hLh20 of">
                     <span v-if="Number(item.price) === 0" class="fr jgTag bg-green">
@@ -75,8 +103,8 @@
                     </span>
                     <span class="fl jgAttr c-ccc f-fA">
                         <i class="c-999 f-fA">{{ item.viewCount }}人学习</i>
-                        |
-                        <i class="c-999 f-fA">9634评论</i>
+                        <!--|
+                        <i class="c-999 f-fA">9634评论</i>-->
                     </span>
                   </section>
                 </div>
@@ -86,7 +114,7 @@
           </article>
         </div>
         <!-- 公共分页 开始 -->
-        <div>
+        <div v-if="data.total!==0">
           <div class="paging">
             <!-- undisable这个class是否存在，取决于数据属性hasPrevious -->
             <a
@@ -136,11 +164,13 @@
 
   import course from "@/api/course";
   import subject from "@/api/subject";
+  import search from "@/api/search";
 
   export default {
     name: "index",
     data() {
       return {
+        num: 1,
         size: 8,
         showNextMore: false,
         showPrevMore: false,
@@ -148,11 +178,20 @@
         subjectIndex: -1,
         price: '',
         newest: '',
-        attention: ''
+        attention: '',
+        comprehensive: 'current bg-orange',
+        searchCourse: {},
+        title: this.$route.query.title,
+        tag: {
+          name: '关键词： ' + this.$route.query.title,
+          type: 'danger'
+        },
+        data: {},
+        subjects: {}
       }
     },
     async asyncData({ params, error }) {
-      const result = await course.getByPage(1, 8).catch(err => err);
+      const result = await search.searchCourse(1, 8).catch(err => err);
       console.log(result.data);
       const subjectResult = await subject.getSubject().catch(err => err);
       console.log(subjectResult);
@@ -161,32 +200,126 @@
         subjects: subjectResult.data.data
       }
     },
+    created() {
+      // this.getData();
+      if(this.$route.query.title != null) {
+        this.searchCourse = {};
+        this.searchCourse.title = this.$route.query.title;
+        this.fetchData(this.num, this.size, this.searchCourse);
+      }
+      if(this.$route.query.subjectId != null) {
+        this.searchCourse = {};
+        this.searchCourse.subjectId = this.$route.query.subjectId;
+        this.fetchData(this.num, this.size, this.searchCourse);
+      }
+    },
+    watch: {
+      $route( to , from ){
+        //根据关键词查找
+        if(to.query.title != null) {
+          this.searchCourse = {};
+          this.searchCourse.title = to.query.title;
+          this.fetchData(this.num, this.size, this.searchCourse);
+        }
+        if(to.query.subjectId != null) {
+          this.searchCourse = {};
+          this.searchCourse.subjectId = to.query.subjectId;
+          this.fetchData(this.num, this.size, this.searchCourse);
+        }
+      }
+    },
     methods: {
+      // async getData() {
+      //   const result = await search.searchCourse(1, 8).catch(err => err);
+      //   console.log(result.data);
+      //   const subjectResult = await subject.getSubject().catch(err => err);
+      //   console.log(subjectResult);
+      //   this.data =result.data.data;
+      //   this.subjects = subjectResult.data.data;
+      // },
       goToPage(page){
         course.getByPage(page, this.size).then(response => {
           this.data = response.data.data
         })
       },
+      async fetchData(num, size, searchCourse) {
+        const result = await search.searchCourse(num, size, searchCourse).catch(err => err);
+        this.data = result.data.data;
+      },
       //根据分类查询
-      getBySubject(index, id) {
+      async getBySubject(index, id) {
         console.log(id);
+        //点击分类高亮
         this.subjectIndex = index;
         this.allSubject = '';
+        this.searchCourse.subjectParentId = id;
+        const result = await search.searchCourse(this.num, this.size, this.searchCourse).catch(err => err);
+        this.data = result.data.data;
       },
-      getByPrice() {
+      async getByPrice() {
         this.price = 'current bg-orange';
         this.newest = '';
         this.attention = '';
+        this.comprehensive = '';
+        if (this.searchCourse.priceSort === 1) {
+          this.searchCourse.priceSort = 2;
+        } else {
+          this.searchCourse.priceSort = 1;
+        }
+        this.searchCourse.gmtCreateSort = null;
+        this.searchCourse.viewCountSort = null;
+        const result = await search.searchCourse(this.num, this.size, this.searchCourse).catch(err => err);
+        this.data = result.data.data;
       },
-      getByNewest() {
+      async getByNewest() {
         this.newest = 'current bg-orange';
         this.price = '';
         this.attention = '';
+        this.comprehensive = '';
+        this.searchCourse.gmtCreateSort = 1;
+        this.searchCourse.viewCountSort = null;
+        this.searchCourse.priceSort = null;
+        const result = await search.searchCourse(this.num, this.size, this.searchCourse).catch(err => err);
+        this.data = result.data.data;
       },
-      getByAttention() {
+      async getByAttention() {
         this.attention = 'current bg-orange';
         this.price = '';
         this.newest = '';
+        this.comprehensive = '';
+        if (this.searchCourse.viewCountSort === 1) {
+          this.searchCourse.viewCountSort = 2;
+        } else {
+          this.searchCourse.viewCountSort = 1;
+        }
+        this.searchCourse.gmtCreateSort = null;
+        this.searchCourse.priceSort = null;
+        const result = await search.searchCourse(this.num, this.size, this.searchCourse).catch(err => err);
+        this.data = result.data.data;
+      },
+      async getByDefault() {
+        this.comprehensive = 'current bg-orange';
+        this.price = '';
+        this.newest = '';
+        this.attention = '';
+        this.searchCourse.viewCountSort = null;
+        this.searchCourse.priceSort = null;
+        const result = await search.searchCourse(this.num, this.size, this.searchCourse).catch(err => err);
+        this.data = result.data.data;
+      },
+      async getAllSubject() {
+        this.allSubject = 'current';
+        this.subjectIndex = -1;
+        const result = await search.searchCourse(this.num, this.size).catch(err => err);
+        this.data = result.data.data;
+      },
+      mySearchCourse(value) {
+        console.log(value);
+      },
+      async closeTag() {
+        const result = await search.searchCourse(this.num, this.size).catch(err => err);
+        this.data = result.data.data;
+        await this.$router.push('/course');
       }
     },
     computed: {
